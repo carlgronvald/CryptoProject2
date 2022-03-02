@@ -9,7 +9,7 @@ int hamming_weight(unsigned char byte) {
 
     while (byte) {
         result++;
-        result &= result - 1;
+        byte &= byte - 1;
     }
     return result;
 }
