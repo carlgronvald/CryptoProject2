@@ -200,23 +200,33 @@ Matrix<double> construct_pearson_correlation_matrix(Matrix<unsigned char>& H, Ma
     return result;
 }
 
+void output_matrix(Matrix<double> &matrix, const char* filename) {
+
+    std::ofstream file;
+    file.open(filename);
+
+    for (size_t i = 0; i < matrix.get_rows(); i++) {
+        for (size_t j = 0; j < matrix.get_columns(); j++) {
+            file << matrix.get_value(i, j);
+            if (j + 1 < matrix.get_columns()) {
+                file << ",";
+            }
+            else if(i + 1 < matrix.get_rows()) {
+                file << "\n";
+            }
+        }
+    }
+
+    file.close();
+}
+
 int main()
 {
     auto T = load_T();
     auto H = construct_Hmatrix();
     auto pearson_correlation_matrix = construct_pearson_correlation_matrix(H, T);
-    std::cout << "Hello World!\n" << pearson_correlation_matrix.get_value(5, 5) << std::endl;
-    double max_correlation = 0;
-    for(int i = 0;i < pearson_correlation_matrix.get_rows(); i++){
-        for (int j = 0; j < pearson_correlation_matrix.get_columns(); j++) {
-            if (pearson_correlation_matrix.get_value(i, j) > max_correlation) {
-                max_correlation = pearson_correlation_matrix.get_value(i, j);
-            }
-        }
-    }
 
-    std::cout << "Max correlation: " << max_correlation << std::endl;
-
+    output_matrix(pearson_correlation_matrix, "../output/correlation_matrix.csv");
 }
 
 // Run program: Ctrl + F5 or Debug > Start Without Debugging menu
