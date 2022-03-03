@@ -6,6 +6,7 @@
 #include <fstream>
 #include <string>
 #include <assert.h>
+#include <math.h>
 
 const size_t PLAINTEXT_COUNT = 600;
 const size_t SAMPLE_COUNT = 55;
@@ -75,6 +76,13 @@ public:
         assert(column >= 0);
         assert(column < columns);
         contents[row * columns + column] = value;
+    }
+
+    size_t get_rows() {
+        return this->rows;
+    }
+    size_t get_columns() {
+        return this->columns;
     }
 
 };
@@ -147,35 +155,67 @@ Matrix<unsigned char> load_plaintexts() {
     return plaintexts;
 }
 
-// Hmatrix is indexed by [plaintext, key]
 Matrix<unsigned char> construct_Hmatrix() {
     auto plaintexts = load_plaintexts();
 
-    std::cout << "Constructing Hmatrix" << std::endl;
-    Matrix<unsigned char> Hmatrix(PLAINTEXT_COUNT, KEY_COUNT);
+    Matrix<unsigned char> result(PLAINTEXT_COUNT, KEY_COUNT);
 
     for (unsigned int key = 0; key < KEY_COUNT; key++) {
-        std::cout << "Key " << key << std::endl;
         for (size_t plaintext_index = 0; plaintext_index < PLAINTEXT_COUNT; plaintext_index++) {
-            Hmatrix.set_value(plaintext_index, key, hamming_weight(S[key ^ plaintexts.get_value(0, plaintext_index)]));
+            result.set_value(plaintext_index, key, hamming_weight(S[key ^ plaintexts.get_value(0, plaintext_index)]));
         }
     }
-    return Hmatrix;
+    return result;
 }
 
-double pearson_correlation(Matrix<unsigned char> Hmatrix, Matrix<double> Tmatrix, size_t h_key_index, size_t t_sample_index) {
+double pearson_correlation(Matrix<unsigned char> &H, Matrix<double> &T, size_t h_key_index, size_t t_sample_index) {
+    double hmean = 0;
+    double tmean = 0;
     for (int i = 0; i < PLAINTEXT_COUNT; i++) {
-        unsigned char hij = Hmatrix.get_value(i, h_key_index);
-        double tij = Tmatrix.get_value(i, t_sample_index);
+        hmean += ((double)H.get_value(i, h_key_index))/PLAINTEXT_COUNT;
+        tmean += T.get_value(i, t_sample_index)/PLAINTEXT_COUNT;
     }
-    return 0; //TODO
+    double lower_h_sum = 0;
+    double lower_t_sum = 0;
+    double upper_sum = 0;
+    for (int i = 0; i < PLAINTEXT_COUNT; i++) {
+        double hij = H.get_value(i, h_key_index);
+        double til = T.get_value(i, t_sample_index);
+
+        upper_sum += (hij - hmean) * (til - tmean);
+        lower_h_sum += (hij - hmean) * (hij - hmean);
+        lower_t_sum += (til - tmean) * (til - tmean);
+    }
+    return upper_sum / sqrt(lower_h_sum * lower_t_sum);
+}
+
+Matrix<double> construct_pearson_correlation_matrix(Matrix<unsigned char>& H, Matrix<double>& T) {
+    Matrix<double> result(KEY_COUNT, SAMPLE_COUNT);
+
+    for (int key = 0; key < KEY_COUNT; key++) {
+        for (int sample = 0; sample < SAMPLE_COUNT; sample++) {
+            result.set_value(key, sample, pearson_correlation(H, T, key, sample));
+        }
+    }
+    return result;
 }
 
 int main()
 {
     auto T = load_T();
-    Matrix<unsigned char> Hmatrix = construct_Hmatrix();
-    std::cout << "Hello World!\n" << hamming_weight(50) << std::endl;
+    auto H = construct_Hmatrix();
+    auto pearson_correlation_matrix = construct_pearson_correlation_matrix(H, T);
+    std::cout << "Hello World!\n" << pearson_correlation_matrix.get_value(5, 5) << std::endl;
+    double max_correlation = 0;
+    for(int i = 0;i < pearson_correlation_matrix.get_rows(); i++){
+        for (int j = 0; j < pearson_correlation_matrix.get_columns(); j++) {
+            if (pearson_correlation_matrix.get_value(i, j) > max_correlation) {
+                max_correlation = pearson_correlation_matrix.get_value(i, j);
+            }
+        }
+    }
+
+    std::cout << "Max correlation: " << max_correlation << std::endl;
 
 }
 
