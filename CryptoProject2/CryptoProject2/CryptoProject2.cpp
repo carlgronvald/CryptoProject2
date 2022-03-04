@@ -29,38 +29,58 @@ const unsigned char S[] = {
     0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94, 0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
     0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16 };
 
-/// <summary>
-/// Contains a Matrix smart pointer, generic over the type T.
-/// Only allows a single owner of the contents.
-/// </summary>
-/// <typeparam name="T"></typeparam>
 template<typename T>
+// A Matrix class, which is basically a generic smart pointer to a rowcount*columncount length array.
 class Matrix {
 private:
     T* contents;
     size_t rows;
     size_t columns;
 public:
+    // Construct/allocate a Matrix with given number of rows & columns.
     Matrix(size_t rows, size_t columns) {
         this->rows = rows;
         this->columns = columns;
         this->contents = new T[rows * columns];
     }
 
+    // Deconstruct the Matrix. Only deallocate if the Matrix has not been moved.
     ~Matrix() {
         if (contents != nullptr) {
             delete[] contents;
         }
     }
 
+    // Copy constructor.
+    Matrix(const Matrix& other) {
+        contents = new T[other.rows * other.columns];
+        rows = other.rows;
+        columns = other.columns;
+        std::memcpy(contents, other.contents, rows * columns);
+    }
+
+    // Move constructor moves the pointer, invalidating the moved matrix.
     Matrix(Matrix&& o) noexcept : rows(o.rows), columns(o.columns), contents(o.contents) {
         o.contents = nullptr;
         o.rows = 0;
         o.columns = 0;
     }
-    //TODO: CONST MOVE CONSTRUCTOR
 
+    // Copy Assignment operator
+    Matrix& operator=(const Matrix& o) {
+        return *this = Matrix(other); //TODO
+    }
+
+    // Move assignment operator
+    Matrix& operator=(Matrix&& o) noexcept {
+        std::swap(contents, o.contents);
+        std::swap(rows, o.rows);
+        std::swap(columns, o.columns);
+    }
+
+    // Returns the matrix value in the given row, column position.
     T get_value(size_t row, size_t column) {
+        // Make sure the access is within bounds & the matrix is not invalidated.
         assert(contents != nullptr);
         assert(row >= 0);
         assert(row < rows);
@@ -69,7 +89,9 @@ public:
         return contents[row * columns + column];
     }
 
+    // Sets the matrix value in the given row, column position.
     void set_value(size_t row, size_t column, T value) {
+        // Make sure the access is within bounds & the matrix is not invalidated.
         assert(contents != nullptr);
         assert(row >= 0);
         assert(row < rows);
@@ -78,15 +100,17 @@ public:
         contents[row * columns + column] = value;
     }
 
+    // Get the number of rows in the matrix.
     size_t get_rows() {
         return this->rows;
     }
+    // Get the number of columns in the matrix.
     size_t get_columns() {
         return this->columns;
     }
-
 };
 
+// Returns the hamming weight of a byte.
 unsigned char hamming_weight(unsigned char byte) {
     unsigned char result = 0;
 
@@ -97,6 +121,7 @@ unsigned char hamming_weight(unsigned char byte) {
     return result;
 }
 
+// Load the T matrix from the file corresponding to our group.
 Matrix<double> load_T() {
     std::ifstream tfile;
     std::cout << "Loading T9.dat" << std::endl;
@@ -127,6 +152,7 @@ Matrix<double> load_T() {
     return result;
 }
 
+// Load plaintexts from the file corresponding to our group. This comes out as a row vector (a matrix with 1 row).
 Matrix<unsigned char> load_plaintexts() {
     std::ifstream tfile;
     std::cout << "Loading inputs9.dat" << std::endl;
@@ -155,6 +181,8 @@ Matrix<unsigned char> load_plaintexts() {
     return plaintexts;
 }
 
+// Construct the H matrix using the plaintexts for our group.
+// The H matrix is indexed by [plaintext, key]
 Matrix<unsigned char> construct_Hmatrix() {
     auto plaintexts = load_plaintexts();
 
@@ -168,6 +196,8 @@ Matrix<unsigned char> construct_Hmatrix() {
     return result;
 }
 
+// Calculate the pearson correlation between one column of the H matrix and one column of the T matrix.
+// This is the correlation between the expected 
 double pearson_correlation(Matrix<unsigned char> &H, Matrix<double> &T, size_t h_key_index, size_t t_sample_index) {
     double hmean = 0;
     double tmean = 0;
@@ -188,7 +218,6 @@ double pearson_correlation(Matrix<unsigned char> &H, Matrix<double> &T, size_t h
     }
     return upper_sum / sqrt(lower_h_sum * lower_t_sum);
 }
-
 Matrix<double> construct_pearson_correlation_matrix(Matrix<unsigned char>& H, Matrix<double>& T) {
     Matrix<double> result(KEY_COUNT, SAMPLE_COUNT);
 
