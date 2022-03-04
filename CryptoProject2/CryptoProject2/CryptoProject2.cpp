@@ -8,9 +8,13 @@
 #include <assert.h>
 #include <math.h>
 
+// Number of plaintexts.
 const size_t PLAINTEXT_COUNT = 600;
+// Number of time samples in the loaded T matrix.
 const size_t SAMPLE_COUNT = 55;
+// Number of keys tested.
 const size_t KEY_COUNT = 256;
+// The AES S-box.
 const unsigned char S[] = {
     0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
     0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
@@ -30,10 +34,11 @@ const unsigned char S[] = {
     0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16 };
 
 template<typename T>
-// A Matrix class, which is basically a generic smart pointer to a rowcount*columncount length array.
+// A Matrix class, which is basically a generic unique pointer to a row count*column count length array.
+// Indexed by rows zero...row count - 1 and columns zero...column count - 1
 class Matrix {
 private:
-    T* contents;
+    std::unique_ptr<T[]> contents;
     size_t rows;
     size_t columns;
 public:
@@ -41,41 +46,7 @@ public:
     Matrix(size_t rows, size_t columns) {
         this->rows = rows;
         this->columns = columns;
-        this->contents = new T[rows * columns];
-    }
-
-    // Deconstruct the Matrix. Only deallocate if the Matrix has not been moved.
-    ~Matrix() {
-        if (contents != nullptr) {
-            delete[] contents;
-        }
-    }
-
-    // Copy constructor.
-    Matrix(const Matrix& other) {
-        contents = new T[other.rows * other.columns];
-        rows = other.rows;
-        columns = other.columns;
-        std::memcpy(contents, other.contents, rows * columns);
-    }
-
-    // Move constructor moves the pointer, invalidating the moved matrix.
-    Matrix(Matrix&& o) noexcept : rows(o.rows), columns(o.columns), contents(o.contents) {
-        o.contents = nullptr;
-        o.rows = 0;
-        o.columns = 0;
-    }
-
-    // Copy Assignment operator
-    Matrix& operator=(const Matrix& o) {
-        return *this = Matrix(other); //TODO
-    }
-
-    // Move assignment operator
-    Matrix& operator=(Matrix&& o) noexcept {
-        std::swap(contents, o.contents);
-        std::swap(rows, o.rows);
-        std::swap(columns, o.columns);
+        this->contents = std::unique_ptr<T[]>(new T[rows * columns]);
     }
 
     // Returns the matrix value in the given row, column position.
@@ -102,10 +73,14 @@ public:
 
     // Get the number of rows in the matrix.
     size_t get_rows() {
+        // Just make sure contents exist and we're not looking at an invalidated matrix
+        assert(contents != nullptr);
         return this->rows;
     }
     // Get the number of columns in the matrix.
     size_t get_columns() {
+        // Just make sure contents exist and we're not looking at an invalidated matrix
+        assert(contents != nullptr);
         return this->columns;
     }
 };
@@ -143,9 +118,10 @@ Matrix<double> load_T() {
         }
 
         lines++;
-
     }
-    std::cout << "Lines:" << lines << std::endl;
+    if (lines != PLAINTEXT_COUNT) {
+        std::cout << "Failed loading T9.dat!" << std::endl;
+    }
 
     tfile.close();
 
@@ -174,7 +150,6 @@ Matrix<unsigned char> load_plaintexts() {
     else {
         std::cout << "Failed loading input9.dat!" << std::endl;
     }
-    std::cout << "indices:" << index << std::endl;
 
     tfile.close();
 
@@ -197,7 +172,7 @@ Matrix<unsigned char> construct_Hmatrix() {
 }
 
 // Calculate the pearson correlation between one column of the H matrix and one column of the T matrix.
-// This is the correlation between the expected 
+// This is the correlation between the expected power output for the given key and the observed power output at time t across all plaintexts.
 double pearson_correlation(Matrix<unsigned char> &H, Matrix<double> &T, size_t h_key_index, size_t t_sample_index) {
     double hmean = 0;
     double tmean = 0;
@@ -218,6 +193,9 @@ double pearson_correlation(Matrix<unsigned char> &H, Matrix<double> &T, size_t h
     }
     return upper_sum / sqrt(lower_h_sum * lower_t_sum);
 }
+
+// Creates the pearson correlation matrix from the H matrix and the T matrix.
+// Rows are keys, columns are time indices.
 Matrix<double> construct_pearson_correlation_matrix(Matrix<unsigned char>& H, Matrix<double>& T) {
     Matrix<double> result(KEY_COUNT, SAMPLE_COUNT);
 
@@ -229,6 +207,7 @@ Matrix<double> construct_pearson_correlation_matrix(Matrix<unsigned char>& H, Ma
     return result;
 }
 
+// Outputs a matrix to a .csv file.
 void output_matrix(Matrix<double> &matrix, const char* filename) {
 
     std::ofstream file;
@@ -251,20 +230,11 @@ void output_matrix(Matrix<double> &matrix, const char* filename) {
 
 int main()
 {
+    // Load matrices, construct pearson correlation matrix.
     auto T = load_T();
     auto H = construct_Hmatrix();
     auto pearson_correlation_matrix = construct_pearson_correlation_matrix(H, T);
 
+    // Output to a .csv file for further analysis in python.
     output_matrix(pearson_correlation_matrix, "../output/correlation_matrix.csv");
 }
-
-// Run program: Ctrl + F5 or Debug > Start Without Debugging menu
-// Debug program: F5 or Debug > Start Debugging menu
-
-// Tips for Getting Started: 
-//   1. Use the Solution Explorer window to add/manage files
-//   2. Use the Team Explorer window to connect to source control
-//   3. Use the Output window to see build output and other messages
-//   4. Use the Error List window to view errors
-//   5. Go to Project > Add New Item to create new code files, or Project > Add Existing Item to add existing code files to the project
-//   6. In the future, to open this project again, go to File > Open > Project and select the .sln file
