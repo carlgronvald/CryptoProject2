@@ -234,7 +234,6 @@ void output_matrix(Matrix<double>& matrix, const char* filename) {
 void add_noise(Matrix<double>& matrix, double amplitude) {
     for (int i = 0; i < matrix.get_rows(); i++) {
         for (int j = 0; j < matrix.get_columns(); j++) {
-            //std::cout << rand() / ((double)RAND_MAX) << std::endl;
             matrix.set_value(i, j, matrix.get_value(i, j) + (rand() / ((double)RAND_MAX) * 2 - 1) * amplitude);
         }
     }
