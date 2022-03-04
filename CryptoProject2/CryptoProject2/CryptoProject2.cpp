@@ -7,6 +7,7 @@
 #include <string>
 #include <assert.h>
 #include <math.h>
+#include <stdlib.h>
 
 // Number of plaintexts.
 const size_t PLAINTEXT_COUNT = 600;
@@ -208,10 +209,10 @@ Matrix<double> construct_pearson_correlation_matrix(Matrix<unsigned char>& H, Ma
 }
 
 // Outputs a matrix to a .csv file.
-void output_matrix(Matrix<double> &matrix, const char* filename) {
+void output_matrix(Matrix<double>& matrix, const char* filename) {
 
     std::ofstream file;
-    file.open(filename);
+    file.open(filename, std::ios::trunc);
 
     for (size_t i = 0; i < matrix.get_rows(); i++) {
         for (size_t j = 0; j < matrix.get_columns(); j++) {
@@ -228,13 +229,36 @@ void output_matrix(Matrix<double> &matrix, const char* filename) {
     file.close();
 }
 
+// Adds white noise to a matrix with given amplitude. (amplitude = max effect of the noise here)
+// So every value in matrix has a number in the range [-amplitude, amplitude] added with uniform distribution.
+void add_noise(Matrix<double>& matrix, double amplitude) {
+    for (int i = 0; i < matrix.get_rows(); i++) {
+        for (int j = 0; j < matrix.get_columns(); j++) {
+            //std::cout << rand() / ((double)RAND_MAX) << std::endl;
+            matrix.set_value(i, j, matrix.get_value(i, j) + (rand() / ((double)RAND_MAX) * 2 - 1) * amplitude);
+        }
+    }
+}
+
 int main()
 {
-    // Load matrices, construct pearson correlation matrix.
+    // Load matrices
+    std::cout << "Loading matrices" << std::endl;
     auto T = load_T();
     auto H = construct_Hmatrix();
+
+    // Add noise to T
+    auto amplitude = 0;
+    std::cout << "Add noise to T with amplitude " << amplitude << std::endl;
+    srand((unsigned)time(0));
+    add_noise(T, amplitude);
+
+    // Construct pearson correlation matrix
+    std::cout << "Constructing pearson correlation matrix" << std::endl;
     auto pearson_correlation_matrix = construct_pearson_correlation_matrix(H, T);
 
-    // Output to a .csv file for further analysis in python.
+    // Output to a .csv file for further analysis in python
+    std::cout << "Outputting correlation matrix to .csv file" << std::endl;
     output_matrix(pearson_correlation_matrix, "../output/correlation_matrix.csv");
+    std::cout << "Done!" << std::endl;
 }
