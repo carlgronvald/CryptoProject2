@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <assert.h>
 #include <math.h>
@@ -84,6 +85,17 @@ public:
         assert(contents != nullptr);
         return this->columns;
     }
+
+    // Returns a deep copy of this Matrix.
+    Matrix deep_copy() {
+        Matrix result(this->rows, this->columns);
+
+        for (int i = 0;i < rows * columns;i++) {
+            result.contents[i] = this->contents[i];
+        }
+
+        return result;
+    }
 };
 
 // Returns the hamming weight of a byte.
@@ -98,11 +110,11 @@ unsigned char hamming_weight(unsigned char byte) {
 }
 
 // Load the T matrix from the file corresponding to our group.
-Matrix<double> load_T() {
+Matrix<double> load_T(const char* filename) {
     std::ifstream tfile;
-    std::cout << "Loading T9.dat" << std::endl;
+    std::cout << "Loading " << filename <<  std::endl;
 
-    tfile.open("../data/T9.dat");
+    tfile.open(filename);
     std::string line;
     Matrix<double> result(PLAINTEXT_COUNT, SAMPLE_COUNT);
     int lines = 0;
@@ -130,11 +142,11 @@ Matrix<double> load_T() {
 }
 
 // Load plaintexts from the file corresponding to our group. This comes out as a row vector (a matrix with 1 row).
-Matrix<unsigned char> load_plaintexts() {
+Matrix<unsigned char> load_plaintexts(const char* filename) {
     std::ifstream tfile;
-    std::cout << "Loading inputs9.dat" << std::endl;
+    std::cout << "Loading " << filename <<  std::endl;
 
-    tfile.open("../data/inputs9.dat");
+    tfile.open(filename);
     Matrix<unsigned char> plaintexts(1, PLAINTEXT_COUNT);
     std::string line;
     int index = 0;
@@ -159,8 +171,8 @@ Matrix<unsigned char> load_plaintexts() {
 
 // Construct the H matrix using the plaintexts for our group.
 // The H matrix is indexed by [plaintext, key]
-Matrix<unsigned char> construct_Hmatrix() {
-    auto plaintexts = load_plaintexts();
+Matrix<unsigned char> construct_Hmatrix(const char* plaintext_file) {
+    auto plaintexts = load_plaintexts(plaintext_file);
 
     Matrix<unsigned char> result(PLAINTEXT_COUNT, KEY_COUNT);
 
@@ -174,7 +186,7 @@ Matrix<unsigned char> construct_Hmatrix() {
 
 // Calculate the pearson correlation between one column of the H matrix and one column of the T matrix.
 // This is the correlation between the expected power output for the given key and the observed power output at time t across all plaintexts.
-double pearson_correlation(Matrix<unsigned char> &H, Matrix<double> &T, size_t h_key_index, size_t t_sample_index) {
+double pearson_correlation(Matrix<unsigned char> & H, Matrix<double> & T, size_t h_key_index, size_t t_sample_index) {
     double hmean = 0;
     double tmean = 0;
     for (int i = 0; i < PLAINTEXT_COUNT; i++) {
@@ -197,7 +209,7 @@ double pearson_correlation(Matrix<unsigned char> &H, Matrix<double> &T, size_t h
 
 // Creates the pearson correlation matrix from the H matrix and the T matrix.
 // Rows are keys, columns are time indices.
-Matrix<double> construct_pearson_correlation_matrix(Matrix<unsigned char>& H, Matrix<double>& T) {
+Matrix<double> construct_pearson_correlation_matrix(Matrix<unsigned char> & H, Matrix<double> & T) {
     Matrix<double> result(KEY_COUNT, SAMPLE_COUNT);
 
     for (int key = 0; key < KEY_COUNT; key++) {
@@ -239,25 +251,42 @@ void add_noise(Matrix<double>& matrix, double amplitude) {
     }
 }
 
+
+
+void generate_noise_series(int min_noise, int max_noise, int step, Matrix<double> &T, Matrix<unsigned char> &H) {
+    for (int noise_amplitude = min_noise; noise_amplitude < max_noise; noise_amplitude += step) {
+        std::cout << "Generating noise with amplitude " << noise_amplitude << std::endl;
+        auto noise_T = T.deep_copy();
+        add_noise(noise_T, noise_amplitude);
+        std::ostringstream ss;
+        ss << "../output/correlation_matrix_noise" << noise_amplitude << ".csv";
+        auto pearson_corr = construct_pearson_correlation_matrix(H, noise_T);
+        output_matrix(pearson_corr, ss.str().c_str());
+    }
+}
+
 int main()
 {
+    const char* T_file = "../data/T9.dat";
+    const char* input_file = "../data/inputs9.dat";
+    const char* output_file = "../output/correlation_matrix.csv";
+
     // Load matrices
     std::cout << "Loading matrices" << std::endl;
-    auto T = load_T();
-    auto H = construct_Hmatrix();
-
-    // Add noise to T
-    auto amplitude = 0;
-    std::cout << "Add noise to T with amplitude " << amplitude << std::endl;
-    srand((unsigned)time(0));
-    add_noise(T, amplitude);
+    auto T = load_T(T_file);
+    auto H = construct_Hmatrix(input_file);
 
     // Construct pearson correlation matrix
-    std::cout << "Constructing pearson correlation matrix" << std::endl;
-    auto pearson_correlation_matrix = construct_pearson_correlation_matrix(H, T);
+    //std::cout << "Constructing pearson correlation matrix" << std::endl;
+    //auto pearson_correlation_matrix = construct_pearson_correlation_matrix(H, T);
 
     // Output to a .csv file for further analysis in python
-    std::cout << "Outputting correlation matrix to .csv file" << std::endl;
-    output_matrix(pearson_correlation_matrix, "../output/correlation_matrix.csv");
+    //std::cout << "Outputting correlation matrix to .csv file" << std::endl;
+    //output_matrix(pearson_correlation_matrix, output_file);
+
+    std::cout << "Generating noise series" << std::endl;
+
+    generate_noise_series(10, 300, 5, T, H);
+
     std::cout << "Done!" << std::endl;
 }
